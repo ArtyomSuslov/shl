@@ -16,14 +16,18 @@
  * limitations under the License.
  */
 
-#ifndef INCLUDE_SHL_REF_H_
-#define INCLUDE_SHL_REF_H_
+#ifndef INCLUDE_SHL_BACKEND_REF_H_
+#define INCLUDE_SHL_BACKEND_REF_H_
 
 #include "csi_nn.h"
 #include "shl_utils.h"
 
 #ifdef __cplusplus
 extern "C" {
+#endif
+
+#ifdef SHL_BUILD_IME
+typedef _Float16 __fp16;
 #endif
 
 int shl_ref_abs_f32(struct csinn_tensor *input, struct csinn_tensor *output,
@@ -1316,4 +1320,4 @@ void asr_buffer_reset(struct csinn_asr_buffer_t *buffer);
 }
 #endif
 
-#endif  // INCLUDE_SHL_REF_H_
+#endif  // INCLUDE_SHL_BACKEND_REF_H_

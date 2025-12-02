@@ -30,6 +30,7 @@ void shl_target_init_rvm();
 void shl_target_init_e907();
 void shl_target_init_c920();
 void shl_target_init_c920v2();
+void shl_target_init_ime();
 
 static int __shl_has_init;
 
@@ -67,6 +68,9 @@ void shl_init()
 #endif
 #ifdef SHL_BUILD_C920V2
     shl_target_init_c920v2();
+#endif
+#ifdef SHL_BUILD_IME
+    shl_target_init_ime();
 #endif
 }
 

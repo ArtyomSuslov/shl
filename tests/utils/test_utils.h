@@ -72,6 +72,13 @@ void result_verify_fp16(__fp16 *reference, __fp16 *output, __fp16 *input, float 
                         bool save);
 #endif
 
+struct csinn_tensor *quantize_f32_to_loose_int4(struct csinn_tensor *src_float);
+
+struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input, 
+                                                       const struct csinn_tensor *weight_int8, 
+                                                       struct csinn_tensor *bias, 
+                                                       enum csinn_api_enum api);
+
 void evaluate_error(void *out, void *ref, int size, enum csinn_dtype_enum dtype);
 
 #ifdef __cplusplus

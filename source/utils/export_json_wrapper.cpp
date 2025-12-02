@@ -85,6 +85,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(
         {CSINN_QUANT_INT8_ASYM_W_SYM,
          "CSINN_QUANT_INT8_ASYM_W_SYM"}, /**< Signed 8-bit Asymmetric activation and Symmetric
                                             weight */
+        {CSINN_QUANT_INT8_ASYM_W_INT4_SYM,
+         "CSINN_QUANT_INT8_ASYM_W_INT4_SYM"},
         {CSINN_QUANT_FLOAT16_W_INT8,
          "CSINN_QUANT_FLOAT16_W_INT8"}, /**< 16-bit floating-point and 8-bit symmetric weight */
     })
@@ -109,6 +111,7 @@ NLOHMANN_JSON_SERIALIZE_ENUM(
                         {CSINN_RVV, "CSINN_RVV"},   /**< RISC-V V extension general platform */
                         {CSINN_RVM, "CSINN_RVM"},   /**< RISC-V Matrix extension general platform */
                         {CSINN_E907, "CSINN_E907"}, /**< E907 CPU platform */
+                        {CSINN_IME, "CSINN_IME"},   /**< SpacemiT CPU platform with IME extension */
                     })
 
 NLOHMANN_JSON_SERIALIZE_ENUM(

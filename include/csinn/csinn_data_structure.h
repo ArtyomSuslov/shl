@@ -80,6 +80,7 @@ enum csinn_quant_enum {
     CSINN_QUANT_FLOAT32,         /**< 32-bit floating-point not quantized */
     CSINN_QUANT_INT4_ASYM_W_SYM, /**< Signed 4-bit Asymmetric activation and Symmetric weight */
     CSINN_QUANT_INT8_ASYM_W_SYM, /**< Signed 8-bit Asymmetric activation and Symmetric weight */
+    CSINN_QUANT_INT8_ASYM_W_INT4_SYM, /**< Signed 8-bit Asymmetric activation and Signed 4-bit Symmetric weight */
     CSINN_QUANT_FLOAT16_W_INT8,  /**< 16-bit floating-point and 8-bit symmetric weight */
     CSINN_QUANT_BLOCK_Q2_K,      /**< Block quantization from llama.cpp */
     CSINN_QUANT_BLOCK_Q4_0,      /**< Block quantization from llama.cpp */
@@ -111,6 +112,7 @@ enum csinn_api_enum {
     CSINN_RVM,      /**< RISC-V Matrix extension general platform */
     CSINN_E907,     /**< E907 CPU platform */
     CSINN_C920V2,   /**< C920V2 CPU platform */
+    CSINN_IME,      /**< SpacemiT CPU platform with IME extension */
     CSINN_API_SIZE,
 };
 

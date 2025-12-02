@@ -18,6 +18,7 @@ openvx_build
 e907_build
 rvv_build
 rvm_build
+ime_build
 c906_static_build
 c906_so_build
 c906_elf_build

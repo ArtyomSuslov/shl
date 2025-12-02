@@ -20,7 +20,21 @@ file(GLOB_RECURSE GLOB_SHL_NN2_SRCS source/nn2/*.c source/utils/*.c)
 file(GLOB_RECURSE GLOB_SHL_REF_SRCS source/reference/*.c)
 file(GLOB_RECURSE GLOB_SHL_GREF_SRCS source/graph_ref/*.c)
 file(GLOB_RECURSE GLOB_SHL_THEAD_RVV_SRCS source/thead_rvv/*.c)
-list(APPEND GLOB_SHL_SRCS ${GLOB_SHL_NN2_SRCS} ${GLOB_SHL_REF_SRCS} ${GLOB_SHL_GREF_SRCS} ${GLOB_SHL_THEAD_RVV_SRCS})
+
+option(SHL_BUILD_IME "Enable Spacemit IME backend optimizations" OFF)
+if(SHL_BUILD_IME)
+    message(STATUS "Spacemit IME backend is enabled.")
+    add_definitions(-DSHL_BUILD_IME)
+    file(GLOB_RECURSE GLOB_SHL_SPACEMIT_IME_SRCS source/spacemit_ime/*.c source/spacemit_ime/*.S)
+endif()
+
+list(APPEND GLOB_SHL_SRCS 
+    ${GLOB_SHL_NN2_SRCS} 
+    ${GLOB_SHL_REF_SRCS} 
+    ${GLOB_SHL_GREF_SRCS} 
+    ${GLOB_SHL_THEAD_RVV_SRCS} 
+    ${GLOB_SHL_SPACEMIT_IME_SRCS}
+)
 list(APPEND SHL_INCLUDE_DIRS ${SHL_INCLUDE_DIR} ${SHL_INCLUDE_DIR}/csinn ${SHL_INCLUDE_DIR}/graph ${SHL_INCLUDE_DIR}/backend)
 
 add_library(shl STATIC ${GLOB_SHL_SRCS})

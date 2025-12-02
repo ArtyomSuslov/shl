@@ -23,6 +23,12 @@ test_pnna_x86:
 unit_test_opt_interface:
 	make -C unit_test -f Makefile.rvv
 
+test_rvv:
+	make -C validation_layer -f Makefile.rvv
+
+test_ime:
+	make -C validation_layer -f Makefile.ime
+
 clean:
 	rm -rf  *.a *.asm utils/*.o
 	cd validation_layer; find . -name "*.o" -or -name "*.elf" | xargs rm; cd -

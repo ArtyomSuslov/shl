@@ -17,6 +17,7 @@
  */
 
 #include "test_utils.h"
+#include "backend/reference/ref.h"
 
 #include "float.h"
 #include "math.h"
@@ -651,6 +652,62 @@ struct csinn_tensor *convert_f32_layer(struct csinn_tensor *tensor, enum csinn_q
     return ret;
 }
 
+/*
+ * Квантует float веса в int8, но с диапазоном значений, подходящим для int4 (-7..7).
+ * Рассчитывает Per-Channel Scale.
+ */
+struct csinn_tensor *quantize_f32_to_loose_int4(struct csinn_tensor *src_float)
+{
+    int32_t N = src_float->dim[0]; // Output channels
+    int32_t K = src_float->dim[1]; // Input channels (inner size)
+
+    // Создаем тензор назначения
+    struct csinn_tensor *ret = csinn_alloc_tensor(NULL);
+    csinn_tensor_copy(ret, src_float);
+    ret->dtype = CSINN_DTYPE_INT8;
+    ret->data = shl_mem_alloc(N * K * sizeof(int8_t));
+    ret->quant_channel = N;
+    ret->qinfo = shl_mem_alloc(N * sizeof(struct csinn_quant_info));
+
+    int8_t *dest_data = (int8_t *)ret->data;
+    float *src_data = (float *)src_float->data;
+
+    // Цикл по каналам
+    for (int n = 0; n < N; n++) {
+        // Ищем min/max в канале
+        float min_val = FLT_MAX;
+        float max_val = -FLT_MAX;
+        for (int k = 0; k < K; k++) {
+            float val = src_data[n * K + k];
+            if (val < min_val) min_val = val;
+            if (val > max_val) max_val = val;
+        }
+
+        // Считаем Scale для 4 бит (Symmetric)
+        float abs_max = fmaxf(fabsf(min_val), fabsf(max_val));
+        
+        // Защита от деления на 0
+        float scale = (abs_max > 1e-6) ? (abs_max / 7.0f) : 1.0f;
+        
+        ret->qinfo[n].scale = scale;
+        ret->qinfo[n].zero_point = 0;
+
+        // Квантуем значения
+        for (int k = 0; k < K; k++) {
+            float val = src_data[n * K + k];
+            // Round -> Cast
+            int32_t q = (int32_t)roundf(val / scale);
+            
+            // Clamp в диапазон [-7, 7]
+            if (q > 7) q = 7;
+            if (q < -7) q = -7; 
+
+            dest_data[n * K + k] = (int8_t)q;
+        }
+    }
+    return ret;
+}
+
 void free_input(struct csinn_tensor *tensor)
 {
     shl_mem_free(tensor->data);
@@ -714,6 +771,64 @@ struct csinn_tensor *fuse_zp_to_bias(struct csinn_tensor *input, struct csinn_te
             new_b -= weight_data[w_index] * sp;
         }
         ret_data[i] = new_b / ret->qinfo->scale;
+    }
+
+    return ret;
+}
+
+struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input, 
+                                                       const struct csinn_tensor *weight_int8, 
+                                                       struct csinn_tensor *bias, 
+                                                       enum csinn_api_enum api)
+{
+    int32_t N = weight_int8->dim[0]; // Output channels
+    int32_t K = weight_int8->dim[1]; // Inner size
+    
+    // Создаем новый тензор Bias (INT32)
+    struct csinn_tensor *ret = csinn_alloc_tensor(NULL);
+    csinn_tensor_copy(ret, bias);
+    ret->dtype = CSINN_DTYPE_INT32;
+    
+    // Выделяем память под данные
+    ret->data = shl_mem_alloc(N * sizeof(int32_t));
+    ret->quant_channel = N;
+
+    int32_t *ret_data = (int32_t *)ret->data;
+    int8_t *w_data = (int8_t *)weight_int8->data;
+
+    // Параметры входа (Per-Tensor)
+    float in_scale = input->qinfo->scale;
+    int32_t in_zp = input->qinfo->zero_point;
+
+    // Указатели на старый bias
+    float *old_bias_f = (bias->dtype == CSINN_DTYPE_FLOAT32) ? (float *)bias->data : NULL;
+    int32_t *old_bias_i = (bias->dtype == CSINN_DTYPE_INT32) ? (int32_t *)bias->data : NULL;
+
+    for (int n = 0; n < N; n++) {
+        // 1. Считаем Scale для Bias[n] = Input_Scale * Weight_Scale[n]
+        float w_scale = weight_int8->qinfo[n].scale; 
+        ret->qinfo[n].scale = in_scale * w_scale;
+        ret->qinfo[n].zero_point = 0;
+
+        // 2. Считаем сумму весов в канале (Sigma W)
+        int32_t weight_sum = 0;
+        for (int k = 0; k < K; k++) {
+            weight_sum += w_data[n * K + k];
+        }
+
+        // 3. Берем старый bias
+        int32_t b_val = 0;
+        if (old_bias_f) {
+            // Квантуем float bias в int32
+            b_val = (int32_t)round(old_bias_f[n] / ret->qinfo[n].scale);
+        } else if (old_bias_i) {
+            b_val = old_bias_i[n];
+        }
+
+        // 4. Fuse ZP: New_Bias = Old_Bias - (Input_ZP * Sum_Weights)
+        // Мы вычитаем, потому что (X_q - Zp) * W = X_q*W - Zp*W. 
+        // Слагаемое "- Zp*W" переносим в bias.
+        ret_data[n] = b_val - (in_zp * weight_sum);
     }
 
     return ret;

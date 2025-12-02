@@ -42,6 +42,10 @@
 #include "reference/ref.h"
 #include "shl_gref.h"
 
+#ifdef SHL_BUILD_IME
+#include "rvv_aliases.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

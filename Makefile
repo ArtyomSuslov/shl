@@ -1,6 +1,6 @@
 # Release or Debug or MinSizeRel
-BUILD_TYPE=Release
-USE_CORE=8
+BUILD_TYPE=Debug
+USE_CORE=6
 INSTALL_DIR=../install_nn2/
 all: nn2_ref_x86
 
@@ -39,6 +39,25 @@ nn2_ref_x86:
 
 nn2_ref_x86_so:
 	mkdir -p x86_ref_build_so; cd x86_ref_build_so; cmake ../ -DCONFIG_BUILD_X86_REF=ON -DCMAKE_BUILD_TYPE=${BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}/x86/; make -j${USE_CORE}; make install; cd -
+
+SPACEMIT_CC=/home/artyom/spacemit-toolchain-linux-glibc-x86_64-v1.1.2/bin/riscv64-unknown-linux-gnu-gcc
+SPACEMIT_CXX=/home/artyom/spacemit-toolchain-linux-glibc-x86_64-v1.1.2/bin/riscv64-unknown-linux-gnu-g++
+FLAGS="-march=rv64gcv_zfh_zvfh -mabi=lp64d"
+nn2_ime:
+	mkdir -p ime_build;                                     \
+	cd ime_build;                                           \
+	cmake ../                                               \
+		-DCMAKE_C_COMPILER=${SPACEMIT_CC}                       \
+		-DCMAKE_CXX_COMPILER=${SPACEMIT_CXX}                    \
+		-DCMAKE_C_FLAGS=${FLAGS}                                \
+		-DCMAKE_CXX_FLAGS=${FLAGS}                              \
+		-DCMAKE_ASM_FLAGS=${FLAGS}                              \
+		-DSHL_BUILD_IME=ON                                      \
+		-DCMAKE_BUILD_TYPE=${BUILD_TYPE}                        \
+		-DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}/ime/;             \
+	make -j${USE_CORE};                                     \
+	make install;                                           \
+	cd -
 
 menuconfig:
 	env  KCONFIG_BASE=    python3  script/kconfig/menuconfig.py Kconfig

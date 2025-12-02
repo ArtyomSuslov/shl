@@ -1,10 +1,12 @@
-LIB_DIR = ../../rvv_build
+LIB_DIR = ../../ime_build
 INCLUDE = -I../../include -I../../include/csinn -I../../include/shl_public -I../utils -I./layer
 CFLAGS = -O0 -g3 -static
-CFLAGS += -march=rv64gcv_zfh_zvfh_zvfhmin -mabi=lp64d
+CFLAGS += -march=rv64gcv_zfh_zvfh -mabi=lp64d
 CFLAGS += -ffunction-sections -fdata-sections -Wl,--gc-sections
-CFLAGS += -DCSINN_API=15
-CFLAGS += -DSHL_BUILD_IME
+CFLAGS += -DCSINN_API=19
+CFLAGS += -DCSINN_QUANT_TYPE=CSINN_QUANT_INT8_ASYM_W_SYM
+# CFLAGS += -DCSINN_QUANT_TYPE=CSINN_QUANT_INT8_ASYM_W_INT4_SYM
+CFLAGS += -DSHL_BUILD_IME -DBASIC_DEBUG
 LIB_NAME = shl
 CC = /home/artyom/spacemit-toolchain-linux-glibc-x86_64-v1.1.2/bin/riscv64-unknown-linux-gnu-gcc
 CPLUS = /home/artyom/spacemit-toolchain-linux-glibc-x86_64-v1.1.2/bin/riscv64-unknown-linux-gnu-g++
@@ -28,7 +30,7 @@ test_objs =
 # test_objs += depthwise_convolution_nhwc.o
 # test_objs += depthwise_convolution1d.o
 # test_objs += erf.o
-# test_objs += fullyconnected.o
+test_objs += fullyconnected.o
 # test_objs += gather.o
 # test_objs += global_avgpool.o
 # test_objs += global_avgpool_nhwc.o
@@ -40,7 +42,7 @@ test_objs =
 # test_objs += maxpool_nhwc.o
 # test_objs += mul.o
 # test_objs += minimum.o
-test_objs += matmul.o
+# test_objs += matmul.o
 # test_objs += pad.o
 # test_objs += prelu.o
 # test_objs += relu.o
