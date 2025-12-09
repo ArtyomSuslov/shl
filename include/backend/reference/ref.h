@@ -26,8 +26,9 @@
 extern "C" {
 #endif
 
-#ifdef SHL_BUILD_IME
-typedef _Float16 __fp16;
+#ifndef DEFINE_NEW_FP16
+#define DEFINE_NEW_FP16
+    typedef _Float16 __fp16;
 #endif
 
 int shl_ref_abs_f32(struct csinn_tensor *input, struct csinn_tensor *output,
