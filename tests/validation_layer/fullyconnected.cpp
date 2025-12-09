@@ -39,7 +39,6 @@ int main(int argc, char **argv)
 
     int *buffer = read_input_data_f32(argv[1]);
     
-    // Парсим размеры
     input->dim[0] = buffer[0];   // batch (M)
     input->dim[1] = buffer[1];   // in_size (K)
     
@@ -60,7 +59,6 @@ int main(int argc, char **argv)
     in_size1 = weight->dim[0] * weight->dim[1];
     out_size = output->dim[0] * output->dim[1];
     
-    // Настройки по умолчанию (для float)
     input->dtype = CSINN_DTYPE_FLOAT32;
     input->layout = CSINN_LAYOUT_NC;
     input->is_const = 0;
@@ -69,7 +67,7 @@ int main(int argc, char **argv)
     weight->dtype = CSINN_DTYPE_FLOAT32;
     weight->layout = CSINN_LAYOUT_OI;
     weight->is_const = 1;
-    weight->quant_channel = 1; // По умолчанию 1, изменим ниже для QC4/8
+    weight->quant_channel = 1;
 
     bias->dtype = CSINN_DTYPE_FLOAT32;
     bias->layout = CSINN_LAYOUT_O;
@@ -81,11 +79,6 @@ int main(int argc, char **argv)
     output->is_const = 0;
     output->quant_channel = 1;
     params->base.api = CSINN_API;
-
-    enum csinn_quant_enum quant_type = CSINN_QUANT_UNSET;
-    if (params->base.api == CSINN_IME) {
-        quant_type = CSINN_QUANT_TYPE; // Для теста IME берём способ квантования из Makefile
-    }
 
     input->data = (float *)(buffer + 3);
     weight->data = (float *)(buffer + 3 + in_size0);
@@ -101,36 +94,68 @@ int main(int argc, char **argv)
     test_fully_op(input, output, weight, bias, params, CSINN_DTYPE_FLOAT16, CSINN_QUANT_FLOAT16,
                   sess, csinn_fullyconnected_init, csinn_fullyconnected, &difference);
 #elif (DTYPE == 8)
-    if (params->base.api == CSINN_IME) {
-        printf("Testing IME Backend with QC4/8 (Int8 Act, Int4/Int8 Weight)\n");
-        
-        // --- ВЕСА ---
-        weight->quant_channel = weight->dim[0];
-        if (weight->qinfo) free(weight->qinfo);
-        weight->qinfo = (struct csinn_quant_info *)malloc(weight->quant_channel * sizeof(struct csinn_quant_info));
-        
-        // --- BIAS ---
-        bias->quant_channel = bias->dim[0]; 
-        if (bias->qinfo) free(bias->qinfo);
-        bias->qinfo = (struct csinn_quant_info *)malloc(bias->quant_channel * sizeof(struct csinn_quant_info));
+    printf("Testing REF Backend with INT8 Symmetric Weights\n");
+    test_fully_op(input, output, weight, bias, params, CSINN_DTYPE_INT8,
+                  CSINN_QUANT_INT8_ASYM_W_SYM, sess, csinn_fullyconnected_init,
+                  csinn_fullyconnected, &difference);
+    
+#elif (DTYPE == 888) // IME: Int8 activation, Int8 weight, Int8 out
+    printf("Testing IME Backend with QC8 (Int8 Act, Int8 Weight)\n");
+    
+    weight->quant_channel = weight->dim[0];
+    if (weight->qinfo) free(weight->qinfo);
+    weight->qinfo = (struct csinn_quant_info *)malloc(weight->quant_channel * sizeof(struct csinn_quant_info));
+    
+    bias->quant_channel = bias->dim[0]; 
+    if (bias->qinfo) free(bias->qinfo);
+    bias->qinfo = (struct csinn_quant_info *)malloc(bias->quant_channel * sizeof(struct csinn_quant_info));
 
-        test_fully_op(input, output, weight, bias, params, 
-                      CSINN_DTYPE_INT8,
-                      quant_type,
-                      sess, 
-                      csinn_fullyconnected_init,
-                      csinn_fullyconnected, 
-                      &difference);
-    } else {
-        printf("Testing REF Backend with INT8 Symmetric Weights\n");
-        test_fully_op(input, output, weight, bias, params, 
-                      CSINN_DTYPE_INT8,
-                      quant_type, 
-                      sess, 
-                      csinn_fullyconnected_init,
-                      csinn_fullyconnected, 
-                      &difference);
-    }
+    test_fully_op(input, output, weight, bias, params, 
+                    CSINN_DTYPE_INT8,
+                    CSINN_QUANT_INT8_ASYM_W_SYM,
+                    sess, 
+                    csinn_fullyconnected_init, 
+                    csinn_fullyconnected, 
+                    &difference);
+        
+#elif (DTYPE == 848) // IME: Int8 activation, Int4 weight, Float out
+    printf("Testing IME Backend with QC4 (Int8 Act, Int4 Weight)\n");
+    
+    weight->quant_channel = weight->dim[0];
+    if (weight->qinfo) free(weight->qinfo);
+    weight->qinfo = (struct csinn_quant_info *)malloc(weight->quant_channel * sizeof(struct csinn_quant_info));
+    
+    bias->quant_channel = bias->dim[0]; 
+    if (bias->qinfo) free(bias->qinfo);
+    bias->qinfo = (struct csinn_quant_info *)malloc(bias->quant_channel * sizeof(struct csinn_quant_info));
+
+    test_fully_op(input, output, weight, bias, params, 
+                    CSINN_DTYPE_INT8,
+                    CSINN_QUANT_INT8_ASYM_W_INT4_SYM,
+                    sess, 
+                    csinn_fullyconnected_init, 
+                    csinn_fullyconnected, 
+                    &difference);
+    
+#elif (DTYPE == 8832) // IME: Int8 activation, Int8 weight, Float out
+    printf("Testing IME Hybrid Mode: Int8 Input/Weights -> Float32 Output\n");
+    
+    weight->quant_channel = weight->dim[0];
+    if (weight->qinfo) free(weight->qinfo);
+    weight->qinfo = (struct csinn_quant_info *)malloc(weight->quant_channel * sizeof(struct csinn_quant_info));
+    
+    bias->quant_channel = bias->dim[0]; 
+    if (bias->qinfo) free(bias->qinfo);
+    bias->qinfo = (struct csinn_quant_info *)malloc(bias->quant_channel * sizeof(struct csinn_quant_info));
+
+    test_fully_op(input, output, weight, bias, params, 
+                  CSINN_DTYPE_INT8,
+                  CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32,
+                  sess, 
+                  csinn_fullyconnected_init, 
+                  csinn_fullyconnected,
+                  &difference);
+    
 #elif (DTYPE == 168)
     test_fully_op(input, output, weight, bias, params, CSINN_DTYPE_FLOAT16,
                   CSINN_QUANT_FLOAT16_W_INT8, sess, csinn_fullyconnected_init, csinn_fullyconnected,

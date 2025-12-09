@@ -48,6 +48,9 @@ enum csinn_dtype_enum {
     CSINN_DTYPE_FLOAT32,  /**< Single-precision floating-point */
     CSINN_DTYPE_FLOAT64,  /**< Double-precision floating-point */
     CSINN_DTYPE_INT64,    /**< Signed 64 bit fixed-point */
+    CSINN_DTYPE_A_INT8_W_INT4_O_INT8,
+    CSINN_DTYPE_A_INT8_W_INT8_O_INT8,
+    CSINN_DTYPE_A_INT8_W_INT8_O_FLOAT32,
     CSINN_DTYPE_SIZE,
 };
 
@@ -81,6 +84,7 @@ enum csinn_quant_enum {
     CSINN_QUANT_INT4_ASYM_W_SYM, /**< Signed 4-bit Asymmetric activation and Symmetric weight */
     CSINN_QUANT_INT8_ASYM_W_SYM, /**< Signed 8-bit Asymmetric activation and Symmetric weight */
     CSINN_QUANT_INT8_ASYM_W_INT4_SYM, /**< Signed 8-bit Asymmetric activation and Signed 4-bit Symmetric weight */
+    CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32, /**<  Signed 8-bit Asymmetric activation and Symmetric weight with 32-bit float result */
     CSINN_QUANT_FLOAT16_W_INT8,  /**< 16-bit floating-point and 8-bit symmetric weight */
     CSINN_QUANT_BLOCK_Q2_K,      /**< Block quantization from llama.cpp */
     CSINN_QUANT_BLOCK_Q4_0,      /**< Block quantization from llama.cpp */

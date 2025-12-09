@@ -227,9 +227,11 @@ static inline int32_t shl_quant_mult(int32_t val, int32_t mult, int32_t shift) {
 void shl_ime_gemm_4x4_int8_int4(int32_t *dst, const int8_t *src, const uint8_t *weight, int32_t k_steps);
 void shl_ime_gemm_4x4_int8_int8(int32_t *dst, const int8_t *src, const int8_t *weight, int32_t k_steps);
 
-int shl_ime_fullyconnected_gemm_int4(struct csinn_tensor *input, struct csinn_tensor *output,
-                                     struct csinn_tensor *weights, struct csinn_tensor *bias,
-                                     struct csinn_fc_params *params)
+int shl_ime_fullyconnected_exec_i8a_i4w_i8o(struct csinn_tensor *input, 
+                                            struct csinn_tensor *output,
+                                            struct csinn_tensor *weights, 
+                                            struct csinn_tensor *bias,
+                                            struct csinn_fc_params *params)
 {
     int8_t *input_data = (int8_t *)input->data;
     int8_t *output_data = (int8_t *)output->data; // Результат пишем сюда (INT8)
@@ -299,9 +301,11 @@ int shl_ime_fullyconnected_gemm_int4(struct csinn_tensor *input, struct csinn_te
     return CSINN_TRUE;
 }
 
-int shl_ime_fullyconnected_gemm_int8(struct csinn_tensor *input, struct csinn_tensor *output,
-                                     struct csinn_tensor *weights, struct csinn_tensor *bias,
-                                     struct csinn_fc_params *params)
+int shl_ime_fullyconnected_exec_i8a_i8w_i8o(struct csinn_tensor *input, 
+                                            struct csinn_tensor *output,
+                                            struct csinn_tensor *weights, 
+                                            struct csinn_tensor *bias,
+                                            struct csinn_fc_params *params)
 {
     int8_t *input_data = (int8_t *)input->data;
     int8_t *output_data = (int8_t *)output->data; // Результат пишем сюда (INT8)
@@ -362,6 +366,82 @@ int shl_ime_fullyconnected_gemm_int8(struct csinn_tensor *input, struct csinn_te
 
                     // Saturation to int8
                     output_data[cur_m * N + cur_n] = sat_s32_to_s8(acc);
+                }
+            }
+        }
+    }
+
+    shl_mem_free(input_reordered);
+    return CSINN_TRUE;
+}
+
+/* 
+ * Специализированная функция для OpenVINO.
+ * Вход: 
+ *   - input: INT8 (Activations, Asymmetric)
+ *   - weights: INT8 (Weights, Symmetric, Packed Nn)
+ *   - bias: INT32 (содержит: RealBias - InputZP * Sigma(W))
+ * Выход:
+ *   - output: FLOAT32 (Dequantized result)
+ */
+int shl_ime_fullyconnected_exec_i8a_i8w_f32o(struct csinn_tensor *input, 
+                                             struct csinn_tensor *output,
+                                             struct csinn_tensor *weights, 
+                                             struct csinn_tensor *bias,
+                                             struct csinn_fc_params *params)
+{
+    int8_t *input_data = (int8_t *)input->data;
+    float *output_data = (float *)output->data;
+    
+    int8_t *weights_data = (int8_t *)weights->data;
+    int32_t *bias_data = (int32_t *)bias->data;
+
+    int32_t M = input->dim[0];
+    int32_t K = input->dim[1];
+    int32_t N = weights->dim[0];
+
+    int32_t M_pad = (M + 3) & ~3;
+    int32_t K_pad = (K + 7) & ~7;
+    int32_t N_pad = (N + 3) & ~3;
+    
+    // Получаем Scale входа (он один на весь тензор)
+    float in_scale = input->qinfo->scale;
+
+    // 1. Reorder Input
+    int8_t *input_reordered = (int8_t *)shl_mem_alloc(M_pad * K_pad * sizeof(int8_t));
+    if (!input_reordered) return CSINN_FALSE;
+    shl_ime_reorder_input_z4_int8(input_reordered, input_data, M, K, K);
+
+    int32_t acc_buffer[16]; 
+
+    // 2. Main Loop
+    for (int m_blk = 0; m_blk < M_pad; m_blk += 4) {
+        for (int n_blk = 0; n_blk < N_pad; n_blk += 4) {
+            
+            int8_t *ptr_in = input_reordered + (m_blk * K_pad);
+            int8_t *ptr_w = weights_data + (n_blk * K_pad); 
+
+            // ASM: Accumulation
+            shl_ime_gemm_4x4_int8_int8(acc_buffer, ptr_in, ptr_w, K_pad);
+
+            for (int i = 0; i < 4; i++) {
+                for (int j = 0; j < 4; j++) {
+                    int cur_m = m_blk + i;
+                    int cur_n = n_blk + j;
+
+                    if (cur_m >= M || cur_n >= N) continue;
+
+                    int32_t acc = acc_buffer[i * 4 + j]; 
+
+                    // Add Fused Bias (RealBias_q - Zp*SumW)
+                    if (bias_data) {
+                        acc += bias_data[cur_n];
+                    }
+                    
+                    float w_scale = weights->qinfo[cur_n].scale; // Per-channel scale
+                    float combined_scale = in_scale * w_scale;
+
+                    output_data[cur_m * N + cur_n] = (float)acc * combined_scale;
                 }
             }
         }

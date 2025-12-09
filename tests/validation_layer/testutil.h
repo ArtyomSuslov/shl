@@ -593,25 +593,19 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
     struct csinn_tensor *qoutput;
     struct csinn_tensor *real_input;
 
-    // [TIMER] Старт замера Квантования
     auto start_quant = std::chrono::high_resolution_clock::now();
 
     if (quant_type == CSINN_QUANT_INT8_ASYM_W_INT4_SYM) {
-        // Квантуем вход
         qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
 
-        // Создаем временные веса (-7..7, int8)
         struct csinn_tensor *qkernel_loose = quantize_f32_to_loose_int4(kernel);
 
-        // Fuse ZP to Bias
         qbias = fuse_zp_to_bias_int8_per_channel(qinput, qkernel_loose, bias, (enum csinn_api_enum)test_api);
         qinput->qinfo->zero_point = 0; 
 
-        // Подготовка финального тензора
         qkernel = csinn_alloc_tensor(NULL);
         csinn_tensor_copy(qkernel, qkernel_loose);
         
-        // Просто копируем данные int8 как есть (для передачи в init)
         int size = csinn_tensor_byte_size(qkernel_loose);
         qkernel->data = calloc(1, size);
         memcpy(qkernel->data, qkernel_loose->data, size);
@@ -643,6 +637,22 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
             real_input = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
             
         }
+    } else if (quant_type == CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32) {
+        qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
+        qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
+
+        qbias = fuse_zp_to_bias_int8_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
+        qinput->qinfo->zero_point = 0;
+
+        qoutput = csinn_alloc_tensor(NULL);
+        csinn_tensor_copy(qoutput, output);
+        qoutput->data = malloc(csinn_tensor_byte_size(output)); 
+
+        real_input = csinn_alloc_tensor(NULL);
+        csinn_tensor_copy(real_input, qinput);
+        real_input->data = malloc(csinn_tensor_byte_size(qinput));
+        memcpy(real_input->data, qinput->data, csinn_tensor_byte_size(qinput));
+
     } else if (quant_type == CSINN_QUANT_FLOAT16_W_INT8) {
         qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
         qinput = convert_f32_layer(input, CSINN_QUANT_FLOAT16, (enum csinn_api_enum)test_api);
@@ -660,21 +670,22 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
         real_input = convert_f32_layer(input, quant_type, (enum csinn_api_enum)test_api);
     }
 
-    // [TIMER] Конец замера Квантования
     auto end_quant = std::chrono::high_resolution_clock::now();
 
     csinn_session_init(sess);
     csinn_set_input_number(1, sess);
     csinn_set_output_number(1, sess);
 
-    // [TIMER] Старт замера Инициализации (выбор ядра, реордер весов)
     auto start_init = std::chrono::high_resolution_clock::now();
+
     int init_ret = init_op(qinput, qoutput, qkernel, qbias, params);
     auto end_init = std::chrono::high_resolution_clock::now();
 
     if (init_ret == CSINN_TRUE) {
         csinn_set_tensor_entry(qinput, sess);
         csinn_set_input(0, qinput, sess);
+
+        std::chrono::time_point<std::chrono::high_resolution_clock> start_run, end_run;
         
         fc_op(qinput, qoutput, qkernel, qbias, params);
         
@@ -682,19 +693,25 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
         csinn_session_setup(sess);
         csinn_update_input(0, real_input, sess);
         
-        // [TIMER] Старт замера Исполнения
-        auto start_run = std::chrono::high_resolution_clock::now();
-        
+        start_run = std::chrono::high_resolution_clock::now();
         csinn_session_run(sess);
-        
-        auto end_run = std::chrono::high_resolution_clock::now();
+        end_run = std::chrono::high_resolution_clock::now();
 
         csinn_get_output(0, qoutput, sess);
-        struct csinn_tensor *foutput = shl_ref_tensor_transform_f32(qoutput);
-        result_verify_f32((float *)output->data, (float *)foutput->data, (float *)input->data,
-                          *difference, csinn_tensor_size(output), false);
         
-        // Вывод результатов времени
+        if (params->base.api == CSINN_IME && quant_type == CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32) {
+            result_verify_f32((float *)output->data, (float *)qoutput->data, (float *)input->data,
+                              *difference, csinn_tensor_size(output), false);
+            
+            free(qoutput->data); 
+            free(qoutput);
+        } else {
+            struct csinn_tensor *foutput = shl_ref_tensor_transform_f32(qoutput);
+            result_verify_f32((float *)output->data, (float *)foutput->data, (float *)input->data,
+                              *difference, csinn_tensor_size(output), false);
+            shl_ref_tensor_transform_free_f32(foutput);
+        }
+        
         std::chrono::duration<double, std::milli> duration_quant = end_quant - start_quant;
         std::chrono::duration<double, std::milli> duration_init = end_init - start_init;
         std::chrono::duration<double, std::milli> duration_run = end_run - start_run;
@@ -706,9 +723,7 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
         printf("Overall Time      : %.4f ms\n", duration_quant.count() + duration_init.count() + duration_run.count());
         printf("=============================================\n");
 
-        // Очистка памяти (чтобы не текла при множественных запусках)
         free_input(real_input);
-        shl_ref_tensor_transform_free_f32(foutput);
 
         csinn_session_deinit(sess);
         csinn_free_session(sess);

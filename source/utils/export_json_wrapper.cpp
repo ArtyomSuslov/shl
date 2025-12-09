@@ -87,6 +87,8 @@ NLOHMANN_JSON_SERIALIZE_ENUM(
                                             weight */
         {CSINN_QUANT_INT8_ASYM_W_INT4_SYM,
          "CSINN_QUANT_INT8_ASYM_W_INT4_SYM"},
+        {CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32,
+         "CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32"},
         {CSINN_QUANT_FLOAT16_W_INT8,
          "CSINN_QUANT_FLOAT16_W_INT8"}, /**< 16-bit floating-point and 8-bit symmetric weight */
     })
