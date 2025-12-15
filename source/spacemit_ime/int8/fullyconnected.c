@@ -89,14 +89,17 @@ int shl_ime_fullyconnected_init_i8a_i8w_f32o(struct csinn_tensor *input,
         return CSINN_TRUE;
     }
 
+    // Мы можем работать с F32 bias
+    assert(bias->dtype == CSINN_DTYPE_FLOAT32);
+
     // Bias Fusion
     if (!params->fc_extra.fuse_zp2bias) {
         params->fc_extra.fuse_zp2bias = true;
         
         if (bias->data == NULL) {
             int out_nodes = weights->dim[0];
-            bias->data = shl_mem_alloc(out_nodes * sizeof(int32_t));
-            memset(bias->data, 0, out_nodes * sizeof(int32_t));
+            bias->data = shl_mem_alloc(out_nodes * sizeof(float));
+            memset(bias->data, 0, out_nodes * sizeof(float));
         }
     }
 

@@ -641,7 +641,7 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
         qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
         qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
 
-        qbias = fuse_zp_to_bias_int8_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
+        qbias = fuse_zp_to_bias_f32_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
         qinput->qinfo->zero_point = 0;
 
         qoutput = csinn_alloc_tensor(NULL);

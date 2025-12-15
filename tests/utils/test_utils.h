@@ -78,6 +78,10 @@ struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input
                                                        const struct csinn_tensor *weight_int8, 
                                                        struct csinn_tensor *bias, 
                                                        enum csinn_api_enum api);
+struct csinn_tensor *fuse_zp_to_bias_f32_per_channel(struct csinn_tensor *input,
+                                                     const struct csinn_tensor *weight_int8,
+                                                     struct csinn_tensor *bias,
+                                                     enum csinn_api_enum api);
 
 void evaluate_error(void *out, void *ref, int size, enum csinn_dtype_enum dtype);
 

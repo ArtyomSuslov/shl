@@ -777,9 +777,9 @@ struct csinn_tensor *fuse_zp_to_bias(struct csinn_tensor *input, struct csinn_te
 }
 
 struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input, 
-                                                       const struct csinn_tensor *weight_int8, 
-                                                       struct csinn_tensor *bias, 
-                                                       enum csinn_api_enum api)
+                                                      const struct csinn_tensor *weight_int8, 
+                                                      struct csinn_tensor *bias, 
+                                                      enum csinn_api_enum api)
 {
     int32_t N = weight_int8->dim[0]; // Output channels
     int32_t K = weight_int8->dim[1]; // Inner size
@@ -829,6 +829,52 @@ struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input
         // Мы вычитаем, потому что (X_q - Zp) * W = X_q*W - Zp*W. 
         // Слагаемое "- Zp*W" переносим в bias.
         ret_data[n] = b_val - (in_zp * weight_sum);
+    }
+
+    return ret;
+}
+
+struct csinn_tensor *fuse_zp_to_bias_f32_per_channel(struct csinn_tensor *input,
+                                                     const struct csinn_tensor *weight_int8,
+                                                     struct csinn_tensor *bias,
+                                                     enum csinn_api_enum api)
+{
+    int32_t N = weight_int8->dim[0]; // Output channels
+    int32_t K = weight_int8->dim[1]; // Inner size
+
+    // Создаем новый bias tensor (FLOAT32)
+    struct csinn_tensor *ret = csinn_alloc_tensor(NULL);
+    csinn_tensor_copy(ret, bias);
+    ret->dtype = CSINN_DTYPE_FLOAT32;
+    ret->quant_channel = N;
+
+    ret->data = shl_mem_alloc(N * sizeof(float));
+    float *ret_data = (float *)ret->data;
+
+    int8_t *w_data = (int8_t *)weight_int8->data;
+
+    float in_scale = input->qinfo->scale;
+    int32_t in_zp  = input->qinfo->zero_point;
+
+    float *old_bias_f = (bias && bias->data)
+                            ? (float *)bias->data
+                            : NULL;
+
+    for (int n = 0; n < N; n++) {
+        float w_scale = weight_int8->qinfo[n].scale;
+        float out_scale = in_scale * w_scale;
+
+        // 1. sum of weights (int8)
+        int32_t weight_sum = 0;
+        for (int k = 0; k < K; k++) {
+            weight_sum += w_data[n * K + k];
+        }
+
+        // 2. старый bias
+        float b = old_bias_f ? old_bias_f[n] : 0.0f;
+
+        // 3. fuse zp (в float!)
+        ret_data[n] = b - (float)in_zp * (float)weight_sum * out_scale;
     }
 
     return ret;

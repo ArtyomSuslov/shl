@@ -394,7 +394,7 @@ int shl_ime_fullyconnected_exec_i8a_i8w_f32o(struct csinn_tensor *input,
     float *output_data = (float *)output->data;
     
     int8_t *weights_data = (int8_t *)weights->data;
-    int32_t *bias_data = (int32_t *)bias->data;
+    float *bias_data = (float *)bias->data;
 
     int32_t M = input->dim[0];
     int32_t K = input->dim[1];
@@ -432,16 +432,11 @@ int shl_ime_fullyconnected_exec_i8a_i8w_f32o(struct csinn_tensor *input,
                     if (cur_m >= M || cur_n >= N) continue;
 
                     int32_t acc = acc_buffer[i * 4 + j]; 
-
-                    // Add Fused Bias (RealBias_q - Zp*SumW)
-                    if (bias_data) {
-                        acc += bias_data[cur_n];
-                    }
                     
                     float w_scale = weights->qinfo[cur_n].scale; // Per-channel scale
                     float combined_scale = in_scale * w_scale;
 
-                    output_data[cur_m * N + cur_n] = (float)acc * combined_scale;
+                    output_data[cur_m * N + cur_n] = acc * combined_scale + bias_data[cur_n];
                 }
             }
         }
