@@ -60,9 +60,7 @@ void shl_ime_fc_reorder_weight_n4_int4(struct csinn_tensor *weights)
         }
     }
 
-    // Подмена памяти
-    // Освобождаем старые INT8 данные
-    shl_mem_free(weights->data); 
+    // ВАЖНО!!! Мы не освобождаем старую память. Её освобождение ложится на пользователя
     
     // Назначаем новые упакованные данные
     weights->data = dest_data;
@@ -120,9 +118,7 @@ void shl_ime_fc_reorder_weight_n4_int8(struct csinn_tensor *weights)
         }
     }
 
-    // Подмена памяти
-    // Освобождаем старые INT8 данные
-    shl_mem_free(weights->data); 
+    // ВАЖНО!!! Мы не освобождаем старую память. Её освобождение ложится на пользователя
     
     // Назначаем новые упакованные данные
     weights->data = dest_data;
