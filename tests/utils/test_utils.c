@@ -776,7 +776,7 @@ struct csinn_tensor *fuse_zp_to_bias(struct csinn_tensor *input, struct csinn_te
     return ret;
 }
 
-struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input, 
+struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input_int8, 
                                                       const struct csinn_tensor *weight_int8, 
                                                       struct csinn_tensor *bias, 
                                                       enum csinn_api_enum api)
@@ -797,8 +797,8 @@ struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input
     int8_t *w_data = (int8_t *)weight_int8->data;
 
     // Параметры входа (Per-Tensor)
-    float in_scale = input->qinfo->scale;
-    int32_t in_zp = input->qinfo->zero_point;
+    float in_scale = input_int8->qinfo->scale;
+    int32_t in_zp = input_int8->qinfo->zero_point;
 
     // Указатели на старый bias
     float *old_bias_f = (bias->dtype == CSINN_DTYPE_FLOAT32) ? (float *)bias->data : NULL;
@@ -834,7 +834,7 @@ struct csinn_tensor *fuse_zp_to_bias_int8_per_channel(struct csinn_tensor *input
     return ret;
 }
 
-struct csinn_tensor *fuse_zp_to_bias_f32_per_channel(struct csinn_tensor *input,
+struct csinn_tensor *fuse_zp_to_bias_f32_per_channel(struct csinn_tensor *input_int8,
                                                      const struct csinn_tensor *weight_int8,
                                                      struct csinn_tensor *bias,
                                                      enum csinn_api_enum api)
@@ -853,8 +853,8 @@ struct csinn_tensor *fuse_zp_to_bias_f32_per_channel(struct csinn_tensor *input,
 
     int8_t *w_data = (int8_t *)weight_int8->data;
 
-    float in_scale = input->qinfo->scale;
-    int32_t in_zp  = input->qinfo->zero_point;
+    float in_scale = input_int8->qinfo->scale;
+    int32_t in_zp  = input_int8->qinfo->zero_point;
 
     float *old_bias_f = (bias && bias->data)
                             ? (float *)bias->data

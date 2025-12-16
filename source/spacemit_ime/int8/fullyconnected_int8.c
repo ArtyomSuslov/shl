@@ -234,7 +234,7 @@ int shl_ime_fullyconnected_exec_i8a_i4w_i8o(struct csinn_tensor *input,
                                             struct csinn_fc_params *params)
 {
     int8_t *input_data = (int8_t *)input->data;
-    int8_t *output_data = (int8_t *)output->data; // Результат пишем сюда (INT8)
+    int8_t *output_data = (int8_t *)output->data;
     
     uint8_t *weights_data = (uint8_t *)weights->data;
     int32_t *bias_data = (int32_t *)bias->data;
@@ -308,7 +308,7 @@ int shl_ime_fullyconnected_exec_i8a_i8w_i8o(struct csinn_tensor *input,
                                             struct csinn_fc_params *params)
 {
     int8_t *input_data = (int8_t *)input->data;
-    int8_t *output_data = (int8_t *)output->data; // Результат пишем сюда (INT8)
+    int8_t *output_data = (int8_t *)output->data;
     
     int8_t *weights_data = (int8_t *)weights->data;
     int32_t *bias_data = (int32_t *)bias->data;
@@ -378,9 +378,9 @@ int shl_ime_fullyconnected_exec_i8a_i8w_i8o(struct csinn_tensor *input,
 /* 
  * Специализированная функция для OpenVINO.
  * Вход: 
- *   - input: INT8 (Activations, Asymmetric)
+ *   - input: INT8 (Activations, Symmetric)
  *   - weights: INT8 (Weights, Symmetric, Packed Nn)
- *   - bias: INT32 (содержит: RealBias - InputZP * Sigma(W))
+ *   - bias: FLOAT32
  * Выход:
  *   - output: FLOAT32 (Dequantized result)
  */
@@ -396,47 +396,51 @@ int shl_ime_fullyconnected_exec_i8a_i8w_f32o(struct csinn_tensor *input,
     int8_t *weights_data = (int8_t *)weights->data;
     float *bias_data = (float *)bias->data;
 
+    float input_scale = input->qinfo->scale;
+
     int32_t M = input->dim[0];
     int32_t K = input->dim[1];
     int32_t N = weights->dim[0];
 
+    // Подготовка размеров с паддингом
     int32_t M_pad = (M + 3) & ~3;
     int32_t K_pad = (K + 7) & ~7;
     int32_t N_pad = (N + 3) & ~3;
     
-    // Получаем Scale входа (он один на весь тензор)
-    float in_scale = input->qinfo->scale;
-
-    // 1. Reorder Input
-    int8_t *input_reordered = (int8_t *)shl_mem_alloc(M_pad * K_pad * sizeof(int8_t));
-    if (!input_reordered) return CSINN_FALSE;
+    // Reorder Input (Zz format)
+    int8_t *input_reordered = shl_mem_alloc(M_pad * K_pad * sizeof(int8_t));
     shl_ime_reorder_input_z4_int8(input_reordered, input_data, M, K, K);
 
+    // Временный буфер для результатов одного тайла 4x4 (int32)
     int32_t acc_buffer[16]; 
 
-    // 2. Main Loop
+    // Цикл по тайлам (M x N)
     for (int m_blk = 0; m_blk < M_pad; m_blk += 4) {
         for (int n_blk = 0; n_blk < N_pad; n_blk += 4) {
             
+            // Вызов ASM Кернела
+            // input: смещение по полосам M
             int8_t *ptr_in = input_reordered + (m_blk * K_pad);
-            int8_t *ptr_w = weights_data + (n_blk * K_pad); 
+            
+            // weights: смещение по панелям N
+            int8_t *ptr_w = weights_data + (n_blk * K_pad);
 
-            // ASM: Accumulation
             shl_ime_gemm_4x4_int8_int8(acc_buffer, ptr_in, ptr_w, K_pad);
 
-            for (int i = 0; i < 4; i++) {
-                for (int j = 0; j < 4; j++) {
+            for (int i = 0; i < 4; i++) {      // Строки (m)
+                for (int j = 0; j < 4; j++) {  // Столбцы (n)
                     int cur_m = m_blk + i;
                     int cur_n = n_blk + j;
 
+                    // Проверка границ (из-за паддинга M/N)
                     if (cur_m >= M || cur_n >= N) continue;
 
+                    // Читаем int32 из аккумулятора
                     int32_t acc = acc_buffer[i * 4 + j]; 
-                    
-                    float w_scale = weights->qinfo[cur_n].scale; // Per-channel scale
-                    float combined_scale = in_scale * w_scale;
 
-                    output_data[cur_m * N + cur_n] = acc * combined_scale + bias_data[cur_n];
+                    float combined_scale = input_scale * weights->qinfo[cur_n].scale;
+
+                    output_data[cur_m * N + cur_n] = (float)acc * combined_scale + bias_data[cur_n];
                 }
             }
         }

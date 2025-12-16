@@ -597,6 +597,7 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
 
     if (quant_type == CSINN_QUANT_INT8_ASYM_W_INT4_SYM) {
         qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
+        qinput->dtype = CSINN_DTYPE_A_INT8_W_INT4_O_INT8;
 
         struct csinn_tensor *qkernel_loose = quantize_f32_to_loose_int4(kernel);
 
@@ -619,6 +620,7 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
     } else if (quant_type == CSINN_QUANT_INT8_ASYM_W_SYM) {
         if (params->base.api == CSINN_IME) {
             qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
+            qinput->dtype = CSINN_DTYPE_A_INT8_W_INT8_O_INT8;
             qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
             
             qbias = fuse_zp_to_bias_int8_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
@@ -638,20 +640,18 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
             
         }
     } else if (quant_type == CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32) {
-        qinput = convert_f32_layer(input, CSINN_QUANT_INT8_ASYM, (enum csinn_api_enum)test_api);
+        qinput = convert_f32_layer(input, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
+        qinput->dtype = CSINN_DTYPE_A_INT8_W_INT8_O_FLOAT32;
         qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
 
-        qbias = fuse_zp_to_bias_f32_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
-        qinput->qinfo->zero_point = 0;
+        // qbias = fuse_zp_to_bias_f32_per_channel(qinput, qkernel, bias, (enum csinn_api_enum)test_api);
+        // qinput->qinfo->zero_point = 0;
+        
+        qbias = bias;
 
-        qoutput = csinn_alloc_tensor(NULL);
-        csinn_tensor_copy(qoutput, output);
-        qoutput->data = malloc(csinn_tensor_byte_size(output)); 
 
-        real_input = csinn_alloc_tensor(NULL);
-        csinn_tensor_copy(real_input, qinput);
-        real_input->data = malloc(csinn_tensor_byte_size(qinput));
-        memcpy(real_input->data, qinput->data, csinn_tensor_byte_size(qinput));
+        qoutput = output;
+        real_input = convert_f32_layer(input, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
 
     } else if (quant_type == CSINN_QUANT_FLOAT16_W_INT8) {
         qkernel = convert_f32_layer(kernel, CSINN_QUANT_INT8_SYM, (enum csinn_api_enum)test_api);
@@ -702,9 +702,6 @@ void test_fully_op(struct csinn_tensor *input, struct csinn_tensor *output,
         if (params->base.api == CSINN_IME && quant_type == CSINN_QUANT_INT8_ASYM_W_SYM_TO_F32) {
             result_verify_f32((float *)output->data, (float *)qoutput->data, (float *)input->data,
                               *difference, csinn_tensor_size(output), false);
-            
-            free(qoutput->data); 
-            free(qoutput);
         } else {
             struct csinn_tensor *foutput = shl_ref_tensor_transform_f32(qoutput);
             result_verify_f32((float *)output->data, (float *)foutput->data, (float *)input->data,

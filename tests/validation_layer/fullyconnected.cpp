@@ -143,10 +143,6 @@ int main(int argc, char **argv)
     weight->quant_channel = weight->dim[0];
     if (weight->qinfo) free(weight->qinfo);
     weight->qinfo = (struct csinn_quant_info *)malloc(weight->quant_channel * sizeof(struct csinn_quant_info));
-    
-    bias->quant_channel = bias->dim[0]; 
-    if (bias->qinfo) free(bias->qinfo);
-    bias->qinfo = (struct csinn_quant_info *)malloc(bias->quant_channel * sizeof(struct csinn_quant_info));
 
     test_fully_op(input, output, weight, bias, params, 
                   CSINN_DTYPE_INT8,
